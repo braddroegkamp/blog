@@ -1,0 +1,61 @@
+<div class="blog">
+    <div class="blog-heading">
+        <a href="/blog/{{blog.key().id()}}" class="blog-title">{{blog.title}}</a>
+        <div class="blog-created">{{blog.created.strftime("%b %d, %Y")}}</div>
+    </div>
+    <pre class="blog-body">{{blog.blog}}</pre>
+
+    <div class="likable">
+        {% if current_user and blog.likable(current_user) == 1 %}
+            <a href="/blog/like/{{blog.key().id()}}" class="like">Like</a>
+            <div class="unlike">Unlike</div>
+        {% elif current_user and blog.likable(current_user) == -1 %}
+            <div class="like">Like</div>
+            <a href="/blog/unlike/{{blog.key().id()}}" class="unlike">Unlike</a>
+        {% else %}
+            <div class="like">Like</div>
+            <div class="unlike">Unlike</div>
+        {% endif %}
+        <div class="like-details">{{blog.likes_list|length}} number of likes</div>
+    </div>
+
+    <div class="comments">
+        {% if current_user and blog.likable(current_user) != 0 and not add_a_comment %}
+            <a href="/blog/comment/{{blog.key().id()}}" class="add-comment">Add comment</a>
+        {% endif %}
+        {% if add_a_comment %}
+            <form method="post">
+                <label>
+                    <div>Comment</div>
+                    <input type="text" name="comment" value="{{comment}}">
+                </label>
+                <div class="error">{{comment_error}}</div>
+                <input type="submit">
+            </form>
+            <a href="/blog/{{blog.key().id()}}">Cancel</a>
+        {% endif %}
+
+        {% for x in range(0, num_comments) %}
+            {% if comment_id == comments[x].key().id() %}
+                <form method="post">
+                    <label>
+                        <div>Comment</div>
+                        <input type="text" name="comment" value="{{comments[x].comment}}">
+                    </label>
+                    <div class="error">{{comment_error}}</div>
+                    <input type="submit">
+                </form>
+                <a href="/blog/{{blog.key().id()}}">Cancel</a>
+            {% else %}
+                <div class="comment-details">
+                    <div class="comment_text">{{comments[x].comment}}</div>
+                    <div class="comment_author">from {{comments[x].author_name}}</div>
+                {% if current_user and current_user == comments[x].author_id %}
+                    <a href="/blog/editcomment/{{comments[x].key().id()}}-{{blog.key().id()}}" class="comment-links">Edit</a>
+                    <a href="/blog/deletecomment/{{comments[x].key().id()}}-{{blog.key().id()}}" class="comment-links">Delete</a>
+                {% endif %}
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>

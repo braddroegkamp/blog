@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+	{% if current_user and current_user != '' %}
+		<a href="/logout">Logout?</a>
+	{% else %}
+		<a href="/login">Login?</a>
+		<a href="/signup">Sign up?</a>
+	{% endif %}
+	<a href="/blog/newpost">New Post</a>
+	<br>
+	{% for blog in blogs %}
+		{{ blog.render(current_user) | safe }}
+		<br><br>
+	{% endfor %}
+
+{% endblock %}

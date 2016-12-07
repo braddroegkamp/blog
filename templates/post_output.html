@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+	<a href="/logout">Logout?</a>
+	<br>
+	{{ blog.render(current_user, add_a_comment, delete_request, comment_error, comment_id) | safe }}
+
+    {% if blog.user == current_user %}
+		<a href="/blog/newpost" class="nav-link">Edit</a>
+		<a href="/blog/deletepost" class="nav-link">Delete</a>
+		{% if delete_request %}
+			<form action = "" method = "post">
+        		<input type="submit" name="delete_post" value="Are You Sure?" />
+    		</form>
+			<a href="/blog/{{blog.key().id()}}">Cancel</a>
+		{% endif %}
+		<br>
+	{% endif %}
+
+{% endblock %}
