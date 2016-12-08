@@ -76,6 +76,19 @@ def render_str(template, **params):
 
 # blog db declaration
 class Blog(db.Model):
+    """
+    Class Blog:  Datastore entity type for blog posts
+
+    Attributes:
+        title (str): title of blog
+        user (str):  author of blog
+        blog (str):  blog entry
+        created (datetime):  datetime blog was created
+        last_modified (datetime):  datetime blog was last modified
+        likes_list (list(int)):  list of user_IDs that have "liked" the blog
+
+    """
+
     title = db.StringProperty(required=True)
     user = db.StringProperty()
     blog = db.TextProperty(required=True)
@@ -195,8 +208,7 @@ class MainPage(Handler):
 class SubmissionPage(Handler):
     def get(self, title="", blog=""):
         this_cookie = self.read_secure_cookie('blog_id')
-        current_user = self.read_secure_cookie('user_id')
-        if current_user and current_user != '':
+        if self.user:
             if this_cookie:
                 post = Blog.get_by_id(int(this_cookie))
                 title = post.title
@@ -208,22 +220,27 @@ class SubmissionPage(Handler):
     def post(self):
         title = self.request.get("title")
         blog = self.request.get("blog")
-
-        if title and blog:
-            this_cookie = self.read_secure_cookie('blog_id')
-            if this_cookie != '':  # if an existing entry
-                b = Blog.get_by_id(int(this_cookie))
-                b.title = title
-                b.blog = blog
-                b.put()
-                self.redirect('/blog/%s' % this_cookie)
-            else:  # else a new entry
-                b = Blog(title=title, blog=blog, user=self.read_secure_cookie('user_id'))
-                b.put()
-                self.redirect('/blog/%s' % str(b.key().id()))
+        if self.user:
+            if title and blog:
+                this_cookie = self.read_secure_cookie('blog_id')
+                current_user = self.read_secure_cookie('user_id')
+                # if an existing entry and current user is author
+                if this_cookie != '' and Blog.get_by_id(int(this_cookie)).user == current_user:
+                    b = Blog.get_by_id(int(this_cookie))
+                    b.title = title
+                    b.blog = blog
+                    b.put()
+                    self.redirect('/blog/%s' % this_cookie)
+                # else a new entry
+                else:
+                    b = Blog(title=title, blog=blog, user=self.read_secure_cookie('user_id'))
+                    b.put()
+                    self.redirect('/blog/%s' % str(b.key().id()))
+            else:
+                error = "subject and content please!"
+                self.render('submission.html', title=title, blog=blog, error=error)
         else:
-            error = "subject and content please!"
-            self.render('submission.html', title=title, blog=blog, error=error)
+            self.redirect('/login')
 
 
 class NewOutputPage(Handler):
@@ -321,45 +338,64 @@ class Logout(Handler):
 
 class Delete(Handler):
     def get(self):
-        this_cookie = int(self.read_secure_cookie('blog_id'))
-        current_user = self.read_secure_cookie('user_id')
-        b = Blog.get_by_id(this_cookie)
-        delete_request = True
-        self.render('post_output.html',
-                    blog=b,
-                    current_user=current_user,
-                    add_a_comment=False,
-                    delete_request=delete_request,
-                    comment_error='',
-                    comment_id=-1)
+        if self.user:
+            this_cookie = int(self.read_secure_cookie('blog_id'))
+            current_user = self.read_secure_cookie('user_id')
+            b = Blog.get_by_id(this_cookie)
+            delete_request = True
+            comment_error = ''
+            if b.user != current_user:
+                comment_error = 'You cannot delete this post.  It is not your to delete!  ' \
+                                'Stopping messing with my cookies!'
+                delete_request = False
+            self.render('post_output.html',
+                        blog=b,
+                        current_user=current_user,
+                        add_a_comment=False,
+                        delete_request=delete_request,
+                        comment_error=comment_error,
+                        comment_id=-1)
+        else:
+            self.redirect('/login')
 
     def post(self):
         this_cookie = int(self.read_secure_cookie('blog_id'))
-        Blog.get_by_id(this_cookie).delete()
-        self.set_secure_cookie('blog_id', '')
-        self.redirect('/blog/?')
+        current_user = self.read_secure_cookie('user_id')
+        b = Blog.get_by_id(this_cookie)
+        if self.user and b.user == current_user:
+            Blog.get_by_id(this_cookie).delete()
+            self.set_secure_cookie('blog_id', '')
+            self.redirect('/blog/?')
+        else:
+            self.redirect('/login')
 
 
 class Like(Handler):
     def get(self, blog_id):
         key = db.Key.from_path('Blog', int(blog_id))
-        current_user = self.read_secure_cookie('user_id')
         b = db.get(key)
-        b.likes_list.append(int(current_user))
-        b.put()
-        self.set_secure_cookie('blog_id', blog_id)
-        self.render('post_output.html', current_user=current_user, blog=b)
+        current_user = self.read_secure_cookie('user_id')
+        if self.user and b.likable(current_user) == 1:
+            b.likes_list.append(int(current_user))
+            b.put()
+            self.set_secure_cookie('blog_id', blog_id)
+            self.render('post_output.html', current_user=current_user, blog=b)
+        else:
+            self.redirect('/login')
 
 
 class Unlike(Handler):
     def get(self, blog_id):
         key = db.Key.from_path('Blog', int(blog_id))
-        current_user = self.read_secure_cookie('user_id')
         b = db.get(key)
-        b.likes_list.remove(int(current_user))
-        b.put()
-        self.set_secure_cookie('blog_id', blog_id)
-        self.render('post_output.html', current_user=current_user, blog=b)
+        current_user = self.read_secure_cookie('user_id')
+        if self.user and b.likable(current_user) == -1:
+            b.likes_list.remove(int(current_user))
+            b.put()
+            self.set_secure_cookie('blog_id', blog_id)
+            self.render('post_output.html', current_user=current_user, blog=b)
+        else:
+            self.redirect('/login')
 
 
 class AddComment(Handler):
@@ -367,76 +403,106 @@ class AddComment(Handler):
         key = db.Key.from_path('Blog', int(blog_id))
         current_user = self.read_secure_cookie('user_id')
         b = db.get(key)
-        self.render('post_output.html',
-                    blog=b,
-                    current_user=current_user,
-                    add_a_comment=True)
-
-    def post(self, blog_id):
-        comment = self.request.get("comment")
-        key = db.Key.from_path('Blog', int(blog_id))
-        current_user = self.read_secure_cookie('user_id')
-        b = db.get(key)
-        if comment:
-            c = BlogComment(comment=comment,
-                            author_id=current_user,
-                            author_name=User.by_id(int(current_user)).name,
-                            parent=b)
-            c.put()
-            self.redirect('/blog/%s' % str(b.key().id()))
-        else:
-            comment_error = "no comment to add!"
+        if self.user and b.user != current_user:
             self.render('post_output.html',
                         blog=b,
                         current_user=current_user,
-                        add_a_comment=True,
-                        comment_error=comment_error)
+                        add_a_comment=True)
+        else:
+            self.redirect('/login')
+
+    def post(self, blog_id):
+        key = db.Key.from_path('Blog', int(blog_id))
+        current_user = self.read_secure_cookie('user_id')
+        b = db.get(key)
+        if self.user and b.user != current_user:
+            comment = self.request.get("comment")
+            if comment:
+                c = BlogComment(comment=comment,
+                                author_id=current_user,
+                                author_name=User.by_id(int(current_user)).name,
+                                parent=b)
+                c.put()
+                self.redirect('/blog/%s' % str(b.key().id()))
+            else:
+                comment_error = "no comment to add!"
+                self.render('post_output.html',
+                            blog=b,
+                            current_user=current_user,
+                            add_a_comment=True,
+                            comment_error=comment_error)
+        else:
+            self.redirect('/login')
 
 
 class EditComment(Handler):
     def get(self, comment_id, blog_id):
-        key = db.Key.from_path('BlogComment', int(comment_id))
         current_user = self.read_secure_cookie('user_id')
-        c = key.id()
         blog_key = db.Key.from_path('Blog', int(blog_id))
         b = db.get(blog_key)
-        self.set_secure_cookie('blog_id', blog_id)
-        self.render('post_output.html',
-                    blog=b,
-                    current_user=current_user,
-                    comment_error='',
-                    comment_id=c)
-
-    def post(self, comment_id, blog_id):
-        comment = self.request.get("comment")
         key = db.Key.from_path('BlogComment', int(comment_id))
-        current_user = self.read_secure_cookie('user_id')
-        b = Blog.get_by_id(int(self.read_secure_cookie('blog_id')))
-        if comment:
-            c = BlogComment.get_by_id(key.id(), parent=b)
-            c.comment = comment
-            c.put()
-            self.redirect('/blog/%s' % str(b.key().id()))
-        else:
-            comment_error = "no comment to add!"
+        c_id = key.id()
+        c = BlogComment.get_by_id(c_id, b)
+        # checks in include...
+        # 1. does user exist,
+        # 2. commenter not author of post,
+        # 3.  editing commenter is comment's author
+        if self.user and b.user != current_user and c.author_id == current_user:
+            self.set_secure_cookie('blog_id', blog_id)
             self.render('post_output.html',
                         blog=b,
                         current_user=current_user,
-                        add_a_comment=True,
-                        comment_error=comment_error)
+                        comment_error='',
+                        comment_id=c_id)
+        else:
+            self.redirect('/login')
+
+    def post(self, comment_id, blog_id):
+        current_user = self.read_secure_cookie('user_id')
+        blog_key = db.Key.from_path('Blog', int(blog_id))
+        b = db.get(blog_key)
+        key = db.Key.from_path('BlogComment', int(comment_id))
+        c_id = key.id()
+        c = BlogComment.get_by_id(c_id, b)
+        if self.user and b.user != current_user and c.author_id == current_user:
+            comment = self.request.get("comment")
+            if comment:
+                c.comment = comment
+                c.put()
+                self.redirect('/blog/%s' % str(b.key().id()))
+            else:
+                comment_error = "no comment to add!"
+                self.render('post_output.html',
+                            blog=b,
+                            current_user=current_user,
+                            add_a_comment=True,
+                            comment_error=comment_error)
+        else:
+            self.redirect('/login')
 
 
 class DeleteComment(Handler):
     def get(self, comment_id, blog_id):
-        key = db.Key.from_path('BlogComment', int(comment_id))
+        current_user = self.read_secure_cookie('user_id')
         blog_key = db.Key.from_path('Blog', int(blog_id))
         b = db.get(blog_key)
-        BlogComment.get_by_id(key.id(), parent=b).delete()
-        self.redirect('/blog/%s' % str(b.key().id()))
+        key = db.Key.from_path('BlogComment', int(comment_id))
+        c_id = key.id()
+        c = BlogComment.get_by_id(c_id, b)
+        # checks in include...
+        # 1. does user exist,
+        # 2. commenter not author of post,
+        # 3.  editing commenter is comment's author
+        if self.user and b.user != current_user and c.author_id == current_user:
+            BlogComment.get_by_id(key.id(), parent=b).delete()
+            self.redirect('/blog/%s' % str(b.key().id()))
+        else:
+            self.redirect('/login')
 
 
 # generate instance
 app = webapp2.WSGIApplication([('/blog/?', MainPage),
+                                ('/', MainPage),
                                ('/blog/newpost', SubmissionPage),
                                ('/blog/([0-9]+)', NewOutputPage),
                                ('/signup', Register),
