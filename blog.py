@@ -68,6 +68,28 @@ def valid_email(email):
     return EMAIL_RE.match(email)
 
 
+def check_if_valid_blog(func):
+    def validate(self, blog_id, comment_id=""):
+        if blog_id and Blog.get_by_id(int(blog_id)):
+            if comment_id:
+                return func(self, blog_id, comment_id)
+            else:
+                return func(self, blog_id)
+            return func(self, blog_id)
+        self.redirect('/blog/post_error')
+    return validate
+
+
+def check_if_valid_comment(func):
+    def validate(self, blog_id, comment_id):
+        blog_key = db.Key.from_path('Blog', int(blog_id))
+        b = db.get(blog_key)
+        if comment_id and BlogComment.get_by_id(int(comment_id), b):
+            return func(self, blog_id, comment_id)
+        self.redirect('/blog/comment_error')
+    return validate
+
+
 # global function to render html...used in blog db declaration
 def render_str(template, **params):
     t = jinja_env.get_template(template)
@@ -205,6 +227,24 @@ class MainPage(Handler):
         self.render('front_page.html', blogs=blogs, current_user=current_user)
 
 
+class MainPostErrorPage(Handler):
+    def get(self):
+        current_user = self.read_secure_cookie('user_id')
+        self.set_secure_cookie('blog_id', '')
+        blogs = Blog.all().order('-created')
+        post_error = "Invalid Blog ID!!!"
+        self.render('front_page.html', blogs=blogs, current_user=current_user, post_error=post_error)
+
+
+class MainCommentErrorPage(Handler):
+    def get(self):
+        current_user = self.read_secure_cookie('user_id')
+        self.set_secure_cookie('blog_id', '')
+        blogs = Blog.all().order('-created')
+        comment_error = "Invalid Comment ID!!!"
+        self.render('front_page.html', blogs=blogs, current_user=current_user, post_error=comment_error)
+
+
 class SubmissionPage(Handler):
     def get(self, title="", blog=""):
         this_cookie = self.read_secure_cookie('blog_id')
@@ -244,6 +284,7 @@ class SubmissionPage(Handler):
 
 
 class NewOutputPage(Handler):
+    @check_if_valid_blog
     def get(self, blog_id):
         current_user = self.read_secure_cookie('user_id')
         if current_user and current_user != '':
@@ -371,6 +412,7 @@ class Delete(Handler):
 
 
 class Like(Handler):
+    @check_if_valid_blog
     def get(self, blog_id):
         key = db.Key.from_path('Blog', int(blog_id))
         b = db.get(key)
@@ -385,6 +427,7 @@ class Like(Handler):
 
 
 class Unlike(Handler):
+    @check_if_valid_blog
     def get(self, blog_id):
         key = db.Key.from_path('Blog', int(blog_id))
         b = db.get(key)
@@ -399,6 +442,7 @@ class Unlike(Handler):
 
 
 class AddComment(Handler):
+    @check_if_valid_blog
     def get(self, blog_id):
         key = db.Key.from_path('Blog', int(blog_id))
         current_user = self.read_secure_cookie('user_id')
@@ -411,6 +455,7 @@ class AddComment(Handler):
         else:
             self.redirect('/login')
 
+    @check_if_valid_blog
     def post(self, blog_id):
         key = db.Key.from_path('Blog', int(blog_id))
         current_user = self.read_secure_cookie('user_id')
@@ -436,7 +481,9 @@ class AddComment(Handler):
 
 
 class EditComment(Handler):
-    def get(self, comment_id, blog_id):
+    @check_if_valid_blog
+    @check_if_valid_comment
+    def get(self, blog_id, comment_id):
         current_user = self.read_secure_cookie('user_id')
         blog_key = db.Key.from_path('Blog', int(blog_id))
         b = db.get(blog_key)
@@ -457,7 +504,9 @@ class EditComment(Handler):
         else:
             self.redirect('/login')
 
-    def post(self, comment_id, blog_id):
+    @check_if_valid_blog
+    @check_if_valid_comment
+    def post(self, blog_id, comment_id):
         current_user = self.read_secure_cookie('user_id')
         blog_key = db.Key.from_path('Blog', int(blog_id))
         b = db.get(blog_key)
@@ -482,7 +531,9 @@ class EditComment(Handler):
 
 
 class DeleteComment(Handler):
-    def get(self, comment_id, blog_id):
+    @check_if_valid_blog
+    @check_if_valid_comment
+    def get(self, blog_id, comment_id):
         current_user = self.read_secure_cookie('user_id')
         blog_key = db.Key.from_path('Blog', int(blog_id))
         b = db.get(blog_key)
@@ -502,7 +553,9 @@ class DeleteComment(Handler):
 
 # generate instance
 app = webapp2.WSGIApplication([('/blog/?', MainPage),
-                                ('/', MainPage),
+                               ('/', MainPage),
+                               ('/blog/post_error', MainPostErrorPage),
+                               ('/blog/comment_error', MainCommentErrorPage),
                                ('/blog/newpost', SubmissionPage),
                                ('/blog/([0-9]+)', NewOutputPage),
                                ('/signup', Register),

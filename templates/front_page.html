@@ -9,6 +9,7 @@
 	{% endif %}
 	<a href="/blog/newpost">New Post</a>
 	<br>
+	<div class="error">{{post_error}}</div>
 	{% for blog in blogs %}
 		{{ blog.render(current_user) | safe }}
 		<br><br>

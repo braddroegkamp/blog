@@ -51,8 +51,8 @@
                     <div class="comment_text">{{comments[x].comment}}</div>
                     <div class="comment_author">from {{comments[x].author_name}}</div>
                 {% if current_user and current_user == comments[x].author_id %}
-                    <a href="/blog/editcomment/{{comments[x].key().id()}}-{{blog.key().id()}}" class="comment-links">Edit</a>
-                    <a href="/blog/deletecomment/{{comments[x].key().id()}}-{{blog.key().id()}}" class="comment-links">Delete</a>
+                    <a href="/blog/editcomment/{{blog.key().id()}}-{{comments[x].key().id()}}" class="comment-links">Edit</a>
+                    <a href="/blog/deletecomment/{{blog.key().id()}}-{{comments[x].key().id()}}" class="comment-links">Delete</a>
                 {% endif %}
                 </div>
             {% endif %}
